@@ -1,0 +1,244 @@
+---
+title: "Assignment#2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r libs}
+############  LOAD LIBRARIES #########
+## First let me Install necessary packages and load the libraries. 
+#  These packages are important to install as they allow R interface to connect with twitter
+#  and gives authentication to third party applications.
+library(twitteR)
+library(ROAuth)
+library(base64enc)
+library(httpuv)
+library(tm)
+library(lsa)
+library(wordcloud)
+library(RWeka)
+library(stringr)
+library(textreg)
+library(RSentiment)
+library(dplyr)
+library(ggplot2)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r twitter connect}
+########## AUTH AND CONNECTION WITH TWITTER ##################
+## It is time to set up the connection using following commands
+credentials <- OAuthFactory$new (consumerKey    = 'Lxlhw5EcCagwRT0H4KJ8KsITx', 
+                                 consumerSecret = '5QvQeOnrWcQ1dJleZoC486iXoPfGcM9VlVr9fceBDU56vGJZan',
+                                 requestURL     = 'https://api.twitter.com/oauth/request_token',
+                                 accessURL      = 'https://api.twitter.com/oauth/access_token',
+                                 authURL        = 'https://api.twitter.com/oauth/authorize')
+
+cons_key      <- 'Lxlhw5EcCagwRT0H4KJ8KsITx'
+cons_secret   <- '5QvQeOnrWcQ1dJleZoC486iXoPfGcM9VlVr9fceBDU56vGJZan'
+access_token  <- '961670700238036992-ErSW3o4y5uPXQOXdWNYsadTcCMtNXso'
+access_secret <- '14GMQEfuz5ALK49FirA83ASu7yfPgIMzQyBoZESpQu4Q1'
+
+##  It is time to set up twitter authentication
+auth <- setup_twitter_oauth(cons_key, cons_secret, access_token, access_secret)
+```
+```{r tweets and data clean}
+## First let me extract all Padmaavat tweets form my twitter account
+padmavat_tweets <- searchTwitter('#padmaavat', n =100, lang = "en", resultType = "recent")
+padmaavat = twListToDF(padmavat_tweets)
+View(padmaavat)
+
+# Let us analyse what we retrived from twitter
+class(padmaavat)
+padmaavat[[1]]
+
+#padmaavat$created <- as.Date(padmaavat$created, "%d.%m.%Y")
+## Extract only text from tweets
+padmaavat$text    <- as.character(padmaavat$text)
+
+# Now that we have learned how to extract tweets it is time to learn how we can use these 
+# tweets and get some important information out of these tweets.
+## Data cleaning and corpus creation
+
+corpus_data       <- VCorpus(VectorSource(padmaavat$text))
+corpus_data
+dim(padmaavat)
+inspect(corpus_data[[1]])
+
+## Remove all URL's
+removeURL <- function(x) gsub("http[^[:space:]]*", "", x)
+corpus_clean_data <- tm_map(corpus_data, content_transformer(removeURL))
+inspect(corpus_clean_data[[1]])
+
+# Retain only aplhabetes, #, @ and numbers white spaces from corpus
+retain_alpha <- function(x) gsub('[^a-zA-Z#@0-9]', ' ', x)
+corpus_clean_data = tm_map(corpus_clean_data,content_transformer(retain_alpha))
+inspect(corpus_clean_data[[1]])
+
+# Convert all char's to lower from corpus
+corpus_clean_data <- tm_map(corpus_clean_data,content_transformer(tolower))
+inspect(corpus_clean_data[[1]])
+
+# Remove stopwords from corpus
+corpus_clean_data <- tm_map(corpus_clean_data, removeWords, stopwords('english'))
+inspect(corpus_clean_data[[1]])
+
+# Remove white spaces from corpus
+corpus_clean_data <-tm_map(corpus_clean_data, stripWhitespace)
+inspect(corpus_clean_data[[1]])
+
+## Let me add cleaned column to existing padmaavat table as char
+padmaavat$cleaned <- convert.tm.to.character(corpus_clean_data)
+View(padmaavat)
+
+```
+
+```{r }
+#load statements
+setwd("D:/Unstructured Data Analysis/Assignment #2")
+## This is my local file downloaded from net, this file contains score for positive and genative words
+afinn_list <- read.csv('WordsWithScore.csv', header = FALSE, stringsAsFactors = FALSE)
+names(afinn_list) <- c('word', 'score')
+afinn_list$word <- tolower(afinn_list$word)
+
+#names = c("NEGATIVE", "NEUTRAL", "POSITIVE")
+#colors = c("red", "yellow", "green")
+#barplot(mr[[1]], main="Movie Review", xlab="Number of votes",legend=mr[[2]],col=colors)
+
+## CALCUALTE THE SENTIMENTS OF TWEETS
+padmaavat$sentiments <- calculate_sentiment(padmaavat$cleaned)$sentiment
+View(padmaavat)
+
+Time <- padmaavat$created
+padmaavat %>% group_by(created, sentiments) %>%
+  summarise(tweets_count = n()) %>% 
+  ggplot(aes(x=Time, y = tweets_count, fill =   sentiments)) + 
+  geom_bar(stat = 'identity' , position = 'fill')
+
+```
+
+```{r Negative_sentiments}
+## Let me sense the negative sentiments about this movie
+negative_tweets  <- (subset(padmaavat, sentiments == "Negative"))
+Vnegative_tweets <- (subset(padmaavat, sentiments == "Very Negative"))
+
+cummulative_negative_tweets <- rbind(negative_tweets, Vnegative_tweets)
+View(cummulative_negative_tweets)
+
+negative_corpus  <- VCorpus(VectorSource(cummulative_negative_tweets$cleaned))
+negative_corpus
+
+dtm_negative   <- DocumentTermMatrix(negative_corpus)
+df_dtmnegative <- as.data.frame(as.matrix(dtm_negative))
+
+dim(df_dtmnegative)
+corpus_negative <- sort(colSums(df_dtmnegative), decreasing=T)
+
+corpus_negative <- data.frame(terms=names(corpus_negative), freq=corpus_negative)
+neg_top_terms   <- head(corpus_negative, 50)
+neg_top_terms
+
+wordcloud(neg_top_terms$terms,neg_top_terms$freq,
+          max.words = 100, 
+          random.order= FALSE, 
+          colors = brewer.pal(8, 'Dark2'), 
+          scale = c(3, .2))
+```
+
+```{r Positive_setiments}
+posTerms <- c(afinn_list$word[afinn_list$score==3 | afinn_list$score==2 | afinn_list$score==1], "first-rate", "insightful", "clever", "charming", "comical", "charismatic", "enjoyable", "absorbing", "sensitive", "intriguing", "powerful", "pleasant", "surprising", "thought-provoking", "imaginative", "unpretentious")
+
+vPosTerms <- c(afinn_list$word[afinn_list$score==5 | afinn_list$score==4], "uproarious", "riveting", "fascinating", "dazzling", "legendary")
+
+## Now, let me calcualte all positive sentiment reviews
+pos_tweets  <- (subset(padmaavat, sentiments == "Positive"))
+Vpos_tweets <- (subset(padmaavat, sentiments == "Very Positive"))
+
+cummulative_pos_tweets <- rbind(pos_tweets, Vpos_tweets)
+View(cummulative_pos_tweets)
+
+pos_corpus  <- VCorpus(VectorSource(cummulative_pos_tweets$cleaned))
+pos_corpus
+
+dtm_pos   <- DocumentTermMatrix(pos_corpus)
+df_dtmpos <- as.data.frame(as.matrix(dtm_pos))
+
+dim(df_dtmpos)
+corpus_pos <- sort(colSums(df_dtmpos), decreasing=T)
+
+corpus_pos    <- data.frame(terms=names(corpus_pos), freq=corpus_pos)
+pos_top_terms <-  head(corpus_pos, 50)
+pos_top_terms
+
+wordcloud(pos_top_terms$terms, pos_top_terms$freq,
+          max.words = 100, 
+          random.order= FALSE, 
+          colors = brewer.pal(8, 'Dark2'), 
+          scale = c(2, .2))
+
+```
+
+```{r Negative_word_freq}
+## Let us calcualte the frequency of negative words present in the Padmaavat tweets
+
+# Categorize words as negative andd very negative and add some movie-specific words
+vNegTerms <- afinn_list$word[afinn_list$score==-5 | afinn_list$score==-4]
+negTerms  <- c(afinn_list$word[afinn_list$score==-3 | afinn_list$score==-2 | afinn_list$score==-1], 'attacks', 'Karni','sena', 'theif', 'robber','failed','shitty', 'bad','court','scenes','hit','Supreme','naxal','dismissed','deletion','dismissing','@skip','no','freaking','sucks','horrible')
+
+ggplot(corpus_negative[negTerms,], aes(terms,freq)) + 
+  geom_bar(stat="identity",fill="lightblue") + theme_bw() + 
+  geom_text(aes(terms, freq, label=freq), size=4) + 
+  theme(axis.text.x = element_text(angle=45))
+
+ggplot(head(corpus_negative, 25), aes(terms,freq)) + 
+  geom_bar(stat="identity", fill="blue") + theme_bw() +
+  geom_text(aes(terms, freq, label=freq), size=4) + 
+  theme(axis.text.x=element_text(angle=45))
+```
+
+```{r static_dashboard}
+## Finally presenting a static cummulative simple dashboard all the charts and plots
+Time <- padmaavat$created
+padmaavat %>% group_by(created, sentiments) %>%
+  summarise(tweets_count = n()) %>% 
+  ggplot(aes(x=Time, y = tweets_count, fill = sentiments)) +
+  geom_bar(stat = 'identity' , position = 'fill')
+
+wordcloud(neg_top_terms$terms, neg_top_terms$freq,
+          max.words = 100, 
+          random.order= FALSE, 
+          colors = brewer.pal(8, 'Dark2'), 
+          scale = c(3, .2))
+
+wordcloud(pos_top_terms$terms, pos_top_terms$freq,
+          max.words = 100, 
+          random.order= FALSE, 
+          colors = brewer.pal(8, 'Dark2'), 
+          scale = c(2, .2))
+
+ggplot(corpus_negative[negTerms,], aes(terms,freq)) + 
+  geom_bar(stat="identity",fill="lightblue") + theme_bw() + 
+  geom_text(aes(terms, freq, label=freq), size=4) + 
+  theme(axis.text.x=element_text(angle=45))
+
+ggplot(head(corpus_negative, 25), aes(terms,freq)) + 
+  geom_bar(stat="identity",fill="blue") + theme_bw() +
+  geom_text(aes(terms, freq, label=freq), size=4) + 
+  theme(axis.text.x=element_text(angle=45))
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
