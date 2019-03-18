@@ -1,0 +1,123 @@
+---
+title: "Cryptocurrency Analysis"
+author: "Hameed Manikbhai"
+date: "27 May 2018"
+output: html_document
+---
+
+## -----------------------------------------------------------------------##
+# ###### Post Graduate Diploma in Data Science - Final Term Project  #######
+## -----------------------------------------------------------------------##
+
+## PROJECT NAME - CRYPTOCURRENCY ANALYSIS and BLOCKCHAIN SENTIMENT ANALYSIS 
+
+# #########        BRIEF ABOUT PROJECT EXECUTION    ########
+## THIS PROJECT IS EXECUTED USING CRISP-DM PROCESS METHOD ##
+##  ----------------------------------------------------- ##
+
+##  -----------------  CRISP-DM STEPS  ----------------- ##
+##             1. DEFINE THE PROBLEM STATEMENT           ##
+##             2. DATA UNDERSTANDING                     ##
+##             3. DATA PREPARATION                       ##
+##             4. MODELING                               ##
+##             5. MODEL EVALUATION                       ##
+##             6. DEPLOYEMENT                            ##
+##  ---------------------------------------------------- ##
+
+
+## Packages used for Analysis #############################
+## The Quantmod package allows you to develop, testing, and deploy of statistically based trading models. 
+## It provides the infrastructure for downloading/importing data from a variety of locations, 
+## analyze that data and produce charts that help determine statistical trends. 
+
+
+
+```{r libraries}
+## Set working directory
+setwd("D:/Term3 Project/Crypto Input Data")
+
+## Load all required libraries
+library(ggplot2)
+library(xts)
+library(quantmod)
+library(PerformanceAnalytics)
+library(forecast)
+library(tseries)
+library(dygraphs)
+library(readr)
+library(dplyr)
+library(scales)
+library(quantmod)
+
+## Read past(history) Bitcoin data for analysis
+
+rawdata <- read.csv("BitcoinBitstampUSD.csv", sep = ',', dec = '.', head = FALSE, nrows = 5000) 
+#skip = 1000000, nrows = 50000)
+colnames(rawdata) <- c('TimeStamp', 'USD', 'Volume')
+
+## Convert date format, by converting seconds to Date and Time format using following function
+seconds_to_date = function(sec) {
+    as.POSIXct(sec, origin = '1970-01-01', tz = 'UTC')
+}
+
+## Add this newly created date and time format as new column in the table
+Sys.setenv(TZ = "UTC")
+rawdata$TimeStamp <- seconds_to_date(rawdata[,1])
+## Use the udpated date and time format column for further processing. 
+## This time format allows us to easily select rows by date and time format for further proccessing
+glimpse(rawdata)
+
+## Create xts object for Price(in USD) agianst Date, this is like reading closing price of each Crypto for each day
+rawdata_xts <- xts(rawdata[,2], rawdata[,1])
+
+## Let check what is present in rawdata we have read using head() and tail()
+head(rawdata_xts)
+tail(rawdata_xts)
+
+## Extract code data of Crypto 
+coredata(head(rawdata_xts))
+
+## Convert xts object to time series object for analysis
+rawdata_ts <- xts::as.timeSeries.xts(rawdata_xts)
+
+## Filling the missing (NA) values in time series using xts package
+rawdata_ts <- na.approx(rawdata_ts)
+
+## Plot Crypto currency price against time
+ggplot(rawdata, aes(TimeStamp, USD)) + 
+  geom_line(aes(color="btc")) +
+  scale_colour_manual("", breaks = c("btc"),
+                          values = c("brown")) +
+  ggtitle("BTC Daily Price Analysis in USD") + 
+  theme(plot.title = element_text(lineheight=.7, face="bold"))
+
+## Plot the Boxplot of BTC of its life cycle
+boxplot(rawdata_ts~cycle(rawdata_ts))
+
+## Let check for Agumented Dickey-Fuller test to check for stationarity
+adf.test(diff(log(rawdata_ts)), alternative="stationary", k=0)
+
+## Let plot the Auto-Correlation function with log
+acf(log(rawdata_ts))
+
+## As the time series is not stationary as it has Trend and Seasonality
+acf(diff(log(rawdata_ts)))
+
+## Let plot the Partial Auto-Correlation to take out seaonality to make time series Stationary
+## From ACF() and PACF() we can find out p and q value of ARIMA (p,d,q)
+pacf(diff(log(rawdata_ts)))
+
+## Apply the ARIMA model with one difference to take out Trend d=1 and with lag of 1, as it has very close 
+## Correlation with its immediate previous lag, as and when lag increses the correlation decays
+(fit  <- arima(log(rawdata_ts), c(0, 1, 1),seasonal = list(order = c(0, 1, 1), period = 12)))
+(fit1 <- arima(log(rawdata_ts), c(0, 1, 1),seasonal = list(order = c(0, 1, 1), period = 12)))
+
+## Predict the BITCOIN price for next 12 months
+pred <- predict(fit, n.ahead = 10*12)
+
+## Plot the prediction graph with exusting dataset
+ts.plot(as.ts(rawdata_ts),2.718^pred$pred, log = "y", lty = c(1,4), col = "green")
+
+```
+
+
