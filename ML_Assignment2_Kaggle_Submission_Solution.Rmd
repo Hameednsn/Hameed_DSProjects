@@ -1,0 +1,74 @@
+---
+title: "ML_Assignment2_Kaggle_Submission_Solution"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r libraries}
+library(tidyverse)
+library(corrplot)
+library(caret)
+library(randomForest)
+library(ggthemes)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r porto}
+# Set the working directory
+setwd("D:/Machine Learning/Assignment #2")
+# Read Porto train and test data set
+porto.traindata <- read.csv(file = "train.csv", stringsAsFactors = FALSE, header = TRUE)
+porto.testdata  <- read.csv(file = "test.csv",  stringsAsFactors = FALSE, header = TRUE)
+
+#Data set summary
+str(porto.traindata)
+str(porto.testdata)
+summary(porto.traindata)
+
+#First let's look at the target variable. How many positives (files claimed) are there?
+
+ggplot(data = porto.traindata, aes(x = as.factor(target))) + 
+    geom_bar(fill = '#84a5a3') + 
+    labs(title = 'Distribution of Target Class (1 = claim filed)')
+
+porto.tab <- table(porto.traindata$target)
+print(porto.tab)
+
+print(paste0(round((porto.tab[2] / porto.tab[1]) * 100, 2), "%", " of customers in the train set filed a claim."))
+
+#LEt us try to find out missing values
+data.frame(feature = names(porto.traindata), 
+           per_miss = map_dbl(porto.traindata, function(x) { sum(x == - 1) / length(x) })) %>%
+    ggplot(aes(x = reorder(feature, -per_miss), y = per_miss)) + 
+    geom_bar(stat = 'identity', color = 'white', fill = '#5a64cd') +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+    labs(x = '', y = '% missing', title = 'Missing Values by Feature') + 
+    scale_y_continuous(labels = scales::percent)
+#Most variables have no missing data. ps_car_03_cat has almost 70% of its values missing. ps_car_05_cat has about 45% missing. ps_reg_03 has around 18% missing. The remaining three have only a small percent missing data.
+
+# Let us try to find out the correlations between different features
+# Get features names that are not binary or categorical
+cont_vars <- names(porto.traindata)[!grepl("_cat|_bin", names(porto.traindata))]
+
+corrplot(cor(porto.traindata[, cont_vars][3:length(cont_vars)]), 
+         type = 'lower', 
+         col = colorRampPalette(c('#feeb8c', '#5a64cd'))(50),
+         tl.col = 'grey40',
+         mar = c(0,0,1,0),
+         title = 'Correlation Matrix of Continuous Features')
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
