@@ -1,0 +1,113 @@
+---
+title: "ML_Default_CreditData_Solution"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r loading libray}
+library(rpart)
+library(C50)
+library(gmodels)
+```
+
+```{r default credit data}
+# Read default credit dataset (.csv) file
+bank_dataframe <- read.csv(file.choose(), header = T, sep = ',')
+
+#structure of the data
+str(bank_dataframe)
+
+#check the number of rows and columns in the dataset
+dim(bank_dataframe)
+
+#summary to check if the fields are read properly in R
+summary(bank_dataframe)
+
+#First eyeball the first 10 rows of the data set
+head(bank_dataframe,10)
+
+#Eyeball the last 10 rows of the data set 
+tail(bank_dataframe,10)
+
+# To get all header names
+names(bank_dataframe)
+
+# Table view of applicant's checking and savings account balance are recorded as categorical variables
+table(bank_dataframe$checking_balance)
+
+# Table view of saving balance
+table(bank_dataframe$savings_balance)
+
+# Let us check default feature, what is it indicating
+table(bank_dataframe$default)
+
+# Data preparation - creating random training and test datasets od ratio 80/20, to replicate the model in future we use set.seed() to constant
+set.seed(1234)
+train_sample <- sample(1000, 800)
+
+str(train_sample)
+credit_train <- bank_dataframe[train_sample, ]
+credit_test <- bank_dataframe[-train_sample, ]
+
+# Now, let us predict the probability of 
+prop.table(table(credit_train$default))
+
+prop.table(table(credit_test$default))
+
+credit_model <- C5.0(credit_train[-17], as.factor(credit_train$default))
+
+credit_model
+summary(credit_model)
+
+# Let predict the model on test data
+credit_pred <- predict(credit_model, credit_test)
+CrossTable(credit_test$default, credit_pred,
+prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+dnn = c('actual default', 'predicted default'))
+
+# Boosting the accuracy of decision trees
+credit_boost10 <- C5.0(credit_train[-17], as.factor(credit_train$default), trials = 10)
+
+credit_boost10
+summary(credit_boost10)
+
+# Predit on test data with boosting 
+credit_boost_pred10 <- predict(credit_boost10, credit_test)
+
+# Plot the values using table
+CrossTable(credit_test$default, credit_boost_pred10,
+prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+dnn = c('actual default', 'predicted default'))
+
+matrix_dimensions <- list(c("no", "yes"), c("no", "yes"))
+names(matrix_dimensions) <- c("predicted", "actual")
+matrix_dimensions
+error_cost <- matrix(c(0, 1, 4, 0), nrow = 2,
+dimnames = matrix_dimensions)
+
+error_cost
+credit_cost <- C5.0(credit_train[-17], as.factor(credit_train$default),
+costs = error_cost)
+#credit_cost_pred <- predict(credit_cost, credit_test)
+#CrossTable(credit_test$default, credit_cost_pred, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn = c('actual default', 'predicted default'))
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
