@@ -1,0 +1,105 @@
+---
+title: "crypto_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+setwd("E:/crypto")
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(forecast)
+library(caret)
+library(zoo)
+```
+
+```{r}
+datathon <- fread("datathon.csv")
+View(datathon)
+```
+
+```{r}
+datathon_bit <- datathon$refID_coin[datathon$refID_coin %in% c(1442,1445,1456,1446,1453,1477,1452,1443,1457,1451,1460,1448,1454,1447,1449,1444,1450,1474,1455,146)]
+price_coin <- datathon  %>% filter(refID_coin %in% c(1442,1445,1456,1446,1453,1477,1452,1443,1457,1451,1460,1448,1454,1447,1449,1444,1450,1474,1455,146)) %>% select(time,refID_coin,price)
+View(price_coin)
+crypt_currency <- split(price_coin,price_coin$refID_coin)
+View(crypt_full[[1]])
+
+```
+
+#Missing Value
+```{r}
+
+a<-as.POSIXct("18/1/2018 00:00:00",format="%d/%m/%Y %H:%M:%S")
+b<- as.POSIXct("25/1/2018 11:55:00",format="%d/%m/%Y %H:%M:%S")
+date_framed <- seq.POSIXt(a, b, by = "5 min")
+date_framed <- data.frame(date_framed)
+colnames(date_framed) <- c("time")
+date_framed$time=as.character(date_framed$time)
+
+missing <- function(coin){
+   df <- merge(date_framed,coin,all.x =T)
+   df$refID_coin <- na.locf(df$refID_coin)
+   df$price <- na.approx(df$price)
+   return(df)
+}
+crypt_full<- lapply(crypt_currency,missing)
+```
+
+```{r}
+
+subseting <- function(x,days){
+  x=crypt_full[[1]]
+  x$time <- as.Date(x$time,format="%Y-%m-%d %H:%M:%S")
+  x$day <- as.integer(format(x$time,format="%d"))
+  x [x$day %in% 25,]
+}
+crypt_currency_train <- lapply(crypt_full,subseting,c(18,19,20,21,22,23,24))
+crypt_currency_test <- lapply(crypt_full,subseting,c(31,25))
+
+```
+
+#Time Series
+```{r}
+crypt_currency_ts <- lapply(crypt_full,function(df){ts(df$price,start = c(1,1),frequency=288)})
+
+```
+
+#forcasting
+```{r}
+
+analysis <- function(price){
+  pred_ar = c()
+  price1=price
+  for (i in 1:288) {
+  price1=price[i:length(price1)]
+  arim_mod <- auto.arima(price1)
+  arima_forecast <- forecast(arim_mod,h=1)
+  pred_ar <- c(pred_ar,arima_forecast$mean)
+  price1 <- c(price1,arima_forecast$mean)
+   }
+  ets_mod <- stlf(price)
+  ets_forecast <- forecast(ets_mod,h=1)
+  pred_et <- c(pred_et,ets_forecast$mean)
+  neural_mod <- nnetar(price)
+  neural_forecast <- forecast(arim_mod,h=1)
+  pred_nn <- c(pred_nn,neural_forecast$mean)
+  return(list(arima=pred_ar,ets=ets_forecast,neural=neural_forecast))
+  
+}
+forecasted <- lapply(crypt_currency_ts, analysis)
+
+
+```
+
+# Deciding
+```{r}
+selected_fit <-  function(variables) {
+  variables[[1]][5]
+}
+deciding_model <- lapply(forecasted,selected_fit)
+
+```
+
