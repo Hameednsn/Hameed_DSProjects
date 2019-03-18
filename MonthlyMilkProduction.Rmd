@@ -1,0 +1,142 @@
+---
+title: "MonthlyMilkProduction"
+output: html_document
+---
+
+```{r problem}
+####################################################################################
+## Perform time series analysis on Monthly milk production: pounds per cow Jan 1962
+## to Dec 1975 dataset and forecast values for next 2-5 years using ARIMA model
+####################################################################################
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r libraries}
+## Load the libraries
+library(rdatamarket)
+library(forecast)
+library(tseries)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r readandexplore}
+## Read the data from data.is
+milkdata_ts <- as.ts(dmseries('http://data.is/1qY3LDd'))
+class(milkdata_ts) # Check dataset class
+is.ts(milkdata_ts) # Check for time series data
+
+## Explore the initial data ##
+head(milkdata_ts)
+start(milkdata_ts)
+end(milkdata_ts)
+frequency(milkdata_ts)
+deltat(milkdata_ts)
+cycle(milkdata_ts)
+time(milkdata_ts)
+
+```
+```{r Descriptive stat}
+## Descriptive Statistics and Visualization##
+mean(milkdata_ts)
+summary(milkdata_ts)
+
+# Plot on original dataset
+plot(milkdata_ts)
+ts.plot(milkdata_ts)
+
+# Check for seasonality 
+seasonplot(milkdata_ts,col = rainbow(3), year.labels = TRUE)
+monthplot(milkdata_ts)
+
+print(milkdata_ts)
+milk_val <- milkdata_ts[,1]
+# Plot for milk production data and check for trend, variance, seasonality etc
+plot(stl(milk_val, s.window = "periodic"))
+adf.test(milkdata_ts, k=12)
+adf.test(milkdata_ts)
+
+```
+```{r Dataformating}
+## Make the time series data stationary by applying log and diff
+milkdata_d <- diff(milkdata_ts)
+plot(milkdata_d)
+adf.test(milkdata_d,k=20)
+adf.test(milkdata_d)
+# Second diff to make data more stationary
+milkdata_d2 <- diff(milkdata_d)
+plot(milkdata_d2)
+adf.test(milkdata_d2,k=10)
+adf.test(milkdata_d2)
+# Extract P and Q value
+acf(milkdata_d2) # to get q value
+pacf(milkdata_d2) # To get p value
+
+```
+```{r model}
+## Generate multiple ARIMA models iterations by altering different values of (p, d, q)
+## And select good model based on MAX AIC value and less log likelihood
+model1  <- arima(milkdata_ts,c(4,2,0))
+model2  <- arima(milkdata_ts,c(3,2,0))
+model3  <- arima(milkdata_ts,c(2,2,0))
+model4  <- arima(milkdata_ts,c(1,2,0))
+model5  <- arima(milkdata_ts,c(0,2,3))
+model6  <- arima(milkdata_ts,c(0,2,2))
+model7  <- arima(milkdata_ts,c(0,2,1))
+model8  <- arima(milkdata_ts,c(3,2,3))
+model9  <- arima(milkdata_ts,c(2,2,2))
+model10 <- arima(milkdata_ts,c(1,2,1))
+
+
+# Print the each model value to check which model predict better
+model1
+model2
+model3
+model4
+model5
+model6
+model7
+model8
+model9
+model10  # Model10 is having MAX ACI and less log likehood
+
+# Let is calculate Bayesian Information Criterion (BIC) value
+BIC (model1)
+BIC (model2)
+BIC (model3)
+BIC (model4)
+BIC (model5)
+BIC (model6)
+BIC (model7)
+BIC (model8)
+BIC (model9)
+BIC (model10)
+
+```
+```{r forecast}
+## Forecast next 5 years predicated values based on best model
+pred <- predict(model10,n.ahead = 12*5 )
+ts.plot(milkdata_ts,pred$pred, lty=c(1,2))
+
+pred$pred
+
+## Forecast next 5 years predicated values based on best model by using another method
+production_arima_fcst <- forecast:::forecast.Arima(model10, h=12*5)
+forecast:::plot.forecast(production_arima_fcst)
+production_arima_fcst
+
+## Calcualte accuracy of the model using MAPE value
+accuracy(production_arima_fcst)
+plot(production_arima_fcst$residuals)
+hist(production_arima_fcst$residuals, col = "red")
+acf(production_arima_fcst$residuals, na.action = na.pass)
+Box.test(production_arima_fcst$residuals,lag = 20,type = "Ljung-Box")
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
