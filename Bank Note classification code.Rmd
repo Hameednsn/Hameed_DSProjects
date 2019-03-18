@@ -1,0 +1,263 @@
+---
+title: "Bank Note classification"
+author: "Hameed Manikbhai"
+date: "18 March 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r libs}
+# libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import tensorflow as tf
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+
+%matplotlib inline
+%config InlineBackend.figure_format='retina'
+
+# Set palette
+crimson_green = sns.diverging_palette(1, 190, sep=80, n=2)
+sns.palplot(crimson_green)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r dataset}
+# Import dataset
+bank_notes = pd.read_csv('bank_note_data.csv')
+bank_notes.shape
+bank_notes.head()
+```
+
+```{r }
+bank_notes.info()
+bank_notes.describe()
+
+```
+```{r}
+sns.countplot(x='Class', data=bank_notes, palette=crimson_green)
+plt.savefig('countplot', dpi=300)
+```
+
+```{r}
+sns.pairplot(data=bank_notes, hue='Class', palette=crimson_green)
+plt.savefig('pairplot', dpi=300)
+```
+
+```{r}
+# Create a new dataframe with 'Class' removed
+bank_notes_without_class = bank_notes.drop('Class', axis=1)
+
+# Fit scaler
+scaler = StandardScaler()
+scaler.fit(bank_notes_without_class)
+
+# Store scaled features as a separate dataframe
+scaled_features = pd.DataFrame(data=scaler.transform(bank_notes_without_class), columns=bank_notes_without_class.columns)
+scaled_features.head()
+```
+
+```{r}
+# Rename 'Class' attribute to 'Authentic'
+bank_notes = bank_notes.rename(columns={'Class': 'Authentic'})
+
+# Create 'Forged' attribute
+bank_notes.loc[bank_notes['Authentic'] == 0, 'Forged'] = 1
+bank_notes.loc[bank_notes['Authentic'] == 1, 'Forged'] = 0
+
+bank_notes.head()
+```
+
+```{r}
+X = scaled_features
+y = bank_notes[['Authentic', 'Forged']]
+
+X = X.as_matrix()
+y = y.as_matrix()
+```
+```{r}
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Shapes
+print("TRAINING SET SHAPES")
+print("X_train :", X_train.shape)
+print("y_train :", y_train.shape)
+print()
+print("TEST SET SHAPES")
+print("X_test :", X_test.shape)
+print("y_test :", y_test.shape)
+```
+```{r}
+# Parameters
+learning_rate = 0.01
+training_epochs = 100
+batch_size = 100
+
+# Neural network parameters
+n_hidden_1 = 4 # # nodes in first hidden layer
+n_hidden_2 = 4 # # nodes in second hidden layer
+n_input = 4 # input shape
+n_classes = 2 # total classes (authentic / forged)
+n_samples = X_train.shape[0]
+
+# Graph input
+x = tf.placeholder(tf.float32, [None, n_input])
+y = tf.placeholder(tf.float32, [None, n_classes])
+```
+```{r}
+def multilayer_perceptron(x, weights, biases):
+    
+    '''
+    x : Placeholder for data input
+    weights: Dictionary of weights
+    biases: Dictionary of biases
+    
+    '''
+    
+    # First hidden layer with ReLU
+    # (X * W) + B
+    layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
+    # RELU: ((X * W) + B) -> f(x) = max(0,x)
+    layer_1 = tf.nn.relu(layer_1)
+    
+    # Second hidden layer with ReLU
+    layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
+    layer_2 = tf.nn.relu(layer_2)
+    
+    # Output layer with linear activation
+    out_layer = tf.matmul(layer_2, weights['out'] + biases['out'])
+    return out_layer
+```
+
+```{r}
+weights = {
+    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
+    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
+    'out': tf.Variable(tf.random_normal([n_hidden_2, n_classes]))
+}
+
+biases = {
+    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+    'out': tf.Variable(tf.random_normal([n_classes]))
+}
+
+```
+
+```{r}
+# Construct model
+preds = multilayer_perceptron(x, weights, biases)
+
+# Define loss and optimizer
+cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=preds))
+optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+
+```
+
+```{r}
+# Initialize variables
+init = tf.initialize_all_variables()
+```
+
+```{r model_train}
+# Launch the session
+sess = tf.InteractiveSession()
+
+# Intialize all the variables
+sess.run(init)
+
+costs = []
+
+for epoch in range(training_epochs):
+
+    avg_cost = 0.0
+
+    # Number of batches
+    total_batch = int(n_samples/batch_size)
+
+    # Loop over all batches
+    for batch in range(total_batch):
+
+        # Grab the next batch of training data and labels
+        batch_x = X_train[batch*batch_size : (1+batch)*batch_size]
+        batch_y = y_train[batch*batch_size : (1+batch)*batch_size]
+
+        # Feed dictionary for optimization / Get loss value
+        _, c = sess.run([optimizer, cost], feed_dict={x: batch_x, y: batch_y})
+
+        # Compute average loss
+        avg_cost += c / total_batch
+    
+    print("Epoch: {} cost={:.4f}".format(epoch+1,avg_cost))
+    costs.append(avg_cost)
+    
+print("Model has completed {} epochs of training.".format(training_epochs))
+```
+
+```{r}
+# Visualize loss over time
+costs_df = pd.Series(data=costs)
+costs_df.plot(figsize=(12, 4), title='Loss over Time', color='#C24F6F')
+plt.xlabel('Epochs')
+plt.ylabel('Cost')
+plt.savefig('loss', dpi=300)
+```
+```{r}
+# Test model
+correct_predictions = tf.cast(tf.equal(tf.argmax(preds, 1), tf.argmax(y, 1)), tf.float32)
+print(correct_predictions[0])
+```
+
+```{r}
+# Accuracy
+accuracy = tf.reduce_mean(correct_predictions)
+
+# Evaluate accuracy and print
+print("Accuracy:", accuracy.eval(feed_dict={x: X_test, y: y_test}))
+
+```
+
+```{r }
+# Build and train random forest classifier
+rfc = RandomForestClassifier(n_estimators=10) 
+rfc.fit(X_train, y_train)
+
+```
+```{r}
+# Get predictions from random forest classifier
+preds_rfc = rfc.predict(X_test)
+print(classification_report(y_test, preds_rfc))
+
+```
+
+```{r}
+#### CONFUSION MATRIX ####
+# Get only the 'Forged' column values from y_test and preds_rfc
+y_test_forged = [item[1] for item in y_test]
+preds_rfc_forged = [item[1] for item in preds_rfc]
+
+# Print confusion matrix
+print(confusion_matrix(y_test_forged, preds_rfc_forged))
+
+```
+
+
