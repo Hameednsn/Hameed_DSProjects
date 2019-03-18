@@ -1,0 +1,65 @@
+---
+title: "AML_Assignment_1_1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r libraries}
+# Load the required libraries
+library(forecast)
+library(tseries)
+```
+
+## Read the input data
+
+```{r InputData}
+# Set the working directory
+setwd("D:/Adv ML/Assignment#1")
+
+# Read the input data
+myLakeData <- read.csv("monthly-lake-erie-levels-1921-19_CSV.csv")
+# Do some initial data analysis
+head(myLakeData)
+tail(myLakeData)
+is.ts(myLakeData)
+class(myLakeData)
+
+#myLakeData$MonthlyErieLevels <- ts (myLakeData$MonthlyErieLevels, start = c(1, 1), end = c(600, 1))
+myLakeData$MonthlyErieLevels <- ts (myLakeData$MonthlyErieLevels, start = c(1921, 1), end = c(1970, 4), frequency = 4)
+
+summary(myLakeData)
+
+dMELevels <- diff(myLakeData$MonthlyErieLevels, 4) # This will cerate year on year differnce
+# Plot the differentiated monthly levels
+plot(dMELevels)
+
+# Estimating the AR model, here order us (AR I MA)
+# Which is mapped to ==================> (p  d  q) , 
+# p => Is the coefficient for AR, this is calculated using pacf funtionc()
+# d => How many times you apply differntiation to make data stationary 
+# q => Is the coefficient for MA, this is calculated using acf funtionc()
+fit_diff_AR <- arima(dMELevels, order = c(1,0,0))
+
+# Let us check the Summary of ARIMA model
+summary(fit_diff_AR)
+# Forecasting for next 5 years
+fit_diff_arf <- forecast(fit_diff_AR, h =20)
+print(fit_diff_arf)
+plot (forecast(fit_diff_arf, include = 20)) # Uses last 10 yrs data to forecats next 5 yrs levels
+
+
+
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
