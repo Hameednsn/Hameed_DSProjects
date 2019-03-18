@@ -1,0 +1,65 @@
+---
+title: "Assignment#3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Load the required libraries
+```{r libs}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(tidytext)
+library(tm)
+library(pdftools)
+
+```
+
+```{r }
+######### Identify Top 5 words using Topic Modeling in each topic / PART  ####
+ 
+## Set the working Directory
+setwd("D:/Unstructured Data Analysis/Assignment #3")
+
+## First let read PDF content into text for further processing
+raw_text_book <- pdf_text("IndiaAfterGandhi.pdf")
+
+df_text_book <- as.data.frame(raw_text_book)
+df_text_book$raw_text_book <- as.character(df_text_book$raw_text_book)
+
+#df_text_book$story <- mutate(df_text_book, story = ifelse(str_detect(raw_text_book, "PART"), raw_text_book, NA))
+
+#df_text_book$story <- as.factor(df_text_book$story)
+
+text_book <- df_text_book %>% mutate(story = ifelse(str_detect(raw_text_book, "PART"), raw_text_book, NA)) %>% fill(story) %>% filter( story != "INDIA AFTER GANDHI" | story != "RAMACHANDRA GUHA") %>% mutate(story = factor(story, levels = unique(story)))
+
+tidy_text_book <- text_book %>% mutate(line = row_number()) %>% unnest_tokens(word, raw_text_book) %>% anti_join(stop_words)
+str(tidy_text_book)
+
+```
+
+```{r }
+library(ggplot2)
+tidy_text_book %>% count(story, word, sort = TRUE) %>% bind_tf_idf(word, story, n) %>%
+  group_by(story) %>% top_n(10) %>% ungroup() %>% mutate(word = reorder(word, tf_idf)) %>%
+  ggplot(aes(word, tf_idf, fill = story)) + 
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~story, scales = "free") + coord_flip()
+```
+
+```{r}
+library(gutenbergr)
+sh <- gutenberg_download(1661)
+class(sh)
+
+```
+
