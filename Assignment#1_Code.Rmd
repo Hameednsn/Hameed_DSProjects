@@ -1,0 +1,267 @@
+---
+title: "Assignment#1_Code"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+############  LOAD LIBRARIES #########
+## First let me Install necessary packages and load the libraries. 
+#  These packages are important to install as they allow R interface to connect with twitter
+#  and gives authentication to third party applications.
+library(twitteR)
+library(ROAuth)
+library(base64enc)
+library(httpuv)
+library(tm)
+library(lsa)
+library(wordcloud)
+library(RWeka)
+
+```
+```{r auth}
+
+########## AUTH AND CONNECTION WITH TWITTER ##################
+## It is time to set up the connection using following commands
+credentials <- OAuthFactory$new (consumerKey    = 'Lxlhw5EcCagwRT0H4KJ8KsITx', 
+                                 consumerSecret = '5QvQeOnrWcQ1dJleZoC486iXoPfGcM9VlVr9fceBDU56vGJZan',
+                                 requestURL     = 'https://api.twitter.com/oauth/request_token',
+                                 accessURL      = 'https://api.twitter.com/oauth/access_token',
+                                 authURL        = 'https://api.twitter.com/oauth/authorize')
+
+cons_key <- 'Lxlhw5EcCagwRT0H4KJ8KsITx'
+cons_secret <- '5QvQeOnrWcQ1dJleZoC486iXoPfGcM9VlVr9fceBDU56vGJZan'
+access_token <- '961670700238036992-ErSW3o4y5uPXQOXdWNYsadTcCMtNXso'
+access_secret <- '14GMQEfuz5ALK49FirA83ASu7yfPgIMzQyBoZESpQu4Q1'
+
+##  It is time to set up twitter authentication
+auth <- setup_twitter_oauth(cons_key, cons_secret, access_token, access_secret)
+
+```
+
+```{r tweet}
+
+## The environment and connection for R to communicate with Twitter has been set up 
+#  and it is finally time to extract some tweets. There are several commands that can
+#  be used to extract tweets by using a specific word, in our case its #datascience
+
+ds_tweets <- searchTwitter('#datascience', n =100, lang = "en", resultType = "recent")
+
+# Let us analyse what we retrived from twitter
+class(ds_tweets)
+#str(ds_tweets)
+ds_tweets[[1]]
+
+# Now that we have learned how to extract tweets it is time to learn how we can use these 
+# tweets and get some important information out of these tweets.
+## Data cleaning and corpus creation
+Text <- sapply(ds_tweets, function(x) x$getText())
+class(Text)
+str(Text)
+Text
+
+ds_corpus <- VCorpus(VectorSource(Text))
+inspect(ds_corpus[[1]])
+
+#############   1.DATA CLEANING ###########
+
+# Remove URL's
+removeURL <- function(x) gsub("http[^[:space:]]*", "", x)
+ds_corpus <- tm_map(ds_corpus, content_transformer(removeURL))
+inspect(ds_corpus[[1]])
+
+# Function to retain only #, alphabets and space and remove rest all char's and junk
+retain_alpha <- function(x) gsub('[^a-zA-Z# ]', '', x)
+ds_corpus    <- tm_map(ds_corpus, content_transformer(retain_alpha))
+inspect(ds_corpus[[1]])
+
+# Let me convert everything into small letters
+# Convert using tolower fucntion
+ds_corpus <- tm_map(ds_corpus, content_transformer(tolower))
+inspect(ds_corpus[[1]])
+
+# Remove numbers
+ds_corpus <- tm_map(ds_corpus, removeNumbers)
+inspect(ds_corpus[[1]])
+
+# Remove stopwords
+ds_corpus <- tm_map(ds_corpus, removeWords, stopwords("english"))
+inspect(ds_corpus[[1]])
+
+# Strip whitespces
+ds_corpus <- tm_map(ds_corpus, stripWhitespace)
+inspect(ds_corpus[[1]])
+
+```
+
+```{r DTM}
+##################   2.WORDCLOUD  #################
+# Now, let me create document term matrix and word cloud for top 50 word frequency
+
+# Create document term matrix (DTM)
+dtm <- DocumentTermMatrix(ds_corpus)
+str(dtm)  # Check structure of dtm
+
+# Covert dtm to data frame
+dtm_df <- as.data.frame(as.matrix(dtm))
+
+# Dispaly wordcloud of top 50 words
+corpus_bow <- (sort(colSums(dtm_df), decreasing = T))
+corpus_bow <- data.frame(terms = names(corpus_bow), freq = corpus_bow)
+top_terms <- head(corpus_bow, 50)
+
+# Barplot top 50 terms appered in the tweet
+barplot(as.numeric(top_terms$freq), col = rainbow(20))
+set.seed(1234)
+wordcloud(top_terms$terms, top_terms$freq, random.order= FALSE, colors = brewer.pal(8, 'Dark2'), scale = c(3, .2))
+#######   Analyzing the word cloud  ######
+## It appears that words like #datascience, #machinelearning, #bigdata, $ai, data etc are used several times in the tweets that were extracted.     ######
+
+```
+
+```{r Bigram}
+################   3.BIGRAM  ################### 
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(max=2))
+dtm_bigram <- DocumentTermMatrix(ds_corpus, control=list(tokenize=BigramTokenizer))
+dtm_bigram
+df_dtm_bigram <- as.data.frame(as.matrix(dtm_bigram))
+View (df_dtm_bigram[1:50, 1:50])
+bigram_freqs <- colSums(df_dtm_bigram)
+top_bigrams <- head(sort(bigram_freqs, decreasing = T), 50)
+top_bigrams
+```
+
+```{r }
+################  4.WORDCLOUD FOR #Tags  ###########
+# Function to retain only #, alphabets and space and remove rest all char's and junk
+retain_alpha <- function(x) gsub("^[a-zA-Z# ]", "", x)
+ds_corpus    <- tm_map(ds_corpus, content_transformer(retain_alpha))
+inspect(ds_corpus[[1]])
+
+# Let me convert everything into small letters
+# Convert using tolower fucntion
+ds_corpus <- tm_map(ds_corpus, content_transformer(tolower))
+inspect(ds_corpus[[1]])
+
+# Remove numbers
+ds_corpus <- tm_map(ds_corpus, removeNumbers)
+inspect(ds_corpus[[1]])
+
+# Remove stopwords
+ds_corpus <- tm_map(ds_corpus, removeWords, stopwords("english"))
+inspect(ds_corpus[[1]])
+
+# Strip whitespces
+ds_corpus <- tm_map(ds_corpus, stripWhitespace)
+inspect(ds_corpus[[1]])
+
+# Now, let me create term document matrix and word cloud
+#dtm <- TermDocumentMatrix(ds_corpus)
+dtm <- DocumentTermMatrix(ds_corpus)
+
+# Covert dtm to data frame
+dtm_df <- as.data.frame(as.matrix(dtm))
+
+# Dispaly wordcloud with words starting with # tags
+corpus_bow <- (sort(colSums(dtm_df), decreasing = T))
+corpus_bow <- data.frame(terms = names(corpus_bow), freq = corpus_bow)
+
+## Extract only twitter hashtags using grep command
+Hashtags      <- (head (grep('\\#.', corpus_bow$terms, value = TRUE), 50))
+Hashtags_freq <- corpus_bow$freq[1:50]
+Hashtags
+Hashtags_freq
+##################   4.WORDCLOUD  of HASHTAGS   #################
+
+# Ploting only 50 hashtag words due to space constaint
+set.seed(1234)
+wordcloud(words= Hashtags, freq = Hashtags_freq, min.freq = 1, random.order= FALSE, colors= brewer.pal(8, "Dark2"), scale = c(2, .2))
+
+```
+
+```{r}
+##############   5.TOP 50 DTM, TOP 5 WORDS WITH HIGHEST CORRELATION ######
+dtm1 <- DocumentTermMatrix(ds_corpus)
+dtm1
+
+dtm_df1 <- as.data.frame(as.matrix(dtm1))
+dim(dtm_df1)
+View(dtm_df1[1:50, ])
+
+## Count the frequesncy of each word in documents
+word_freqs  <- colSums(dtm_df1)
+## Sort the most frequent word at the top and get top 50 words
+top_50words <- head(sort(word_freqs, decreasing = T), 50)
+top_50words_df <- as.data.frame(top_50words)
+View(top_50words_df)
+
+
+## Plot barplot to check which words appers at the top
+barplot(head(top_50words_df$top_50words, 50), col = rainbow(20))
+
+## Join the top 50 words with original list using merge
+
+merged_dtm_list <- merge(top_50words_df$top_50words, dtm_df1, all=TRUE)
+dim(merged_dtm_list)
+
+## Count the frequesncy of each word in documents
+word_freqs1  <- colSums(merged_dtm_list)
+## Sort the most frequent word at the top and get top 50 words
+top_5words <- head(sort(word_freqs1, decreasing = T), 5)
+View(top_5words)
+
+new_corpus <- VCorpus(VectorSource(merged_dtm_list))
+txt_dtm    <- DocumentTermMatrix(new_corpus)
+inspect(txt_dtm)
+
+#findFreqTerms(txt_dtm, lowfreq = 3)
+#findAssocs(txt_dtm, '#ai', 0.5)
+myMatrix <- as.matrix(txt_dtm)
+myValue  <- sort(colSums(myMatrix), decreasing = TRUE)
+myData   <- data.frame(word= names(myValue), freq = myValue)
+
+top_5words <- head(myData, 5)
+
+top_5words
+## Find the correlation between top 5 words with other columns words
+#findAssocs(txt_dtm, as.vector(top_5words$word), corlimit = 0.75)
+
+```
+
+```{r }
+#########    MOST SIMILAR WORDS   #######
+terms_uniq = colnames(dtm_df1)
+head(terms_uniq)
+similar <- function(input_words){
+terms_comp = c()
+cosine_vals = c()
+for (word in terms_uniq){
+ if (word!=input_words){
+   cosine_sini = cosine(dtm_df1[,input_words],dtm_df1[,word])
+  ## if (cosine_sini!=0) {
+   terms_comp  = c(terms_comp,word)
+   cosine_vals = c(cosine_vals,cosine_sini)
+   result = data.frame(words = terms_comp, cosine_vals=cosine_vals)
+  ## }
+ }
+}
+  print(result %>% arrange(-cosine_vals) %>% head(5))
+}
+
+similar('#abdsc')
+similar('#ai')
+#similar('#algorithm')
+#similar('#algorithms')
+#similar('#ar') 
+
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
