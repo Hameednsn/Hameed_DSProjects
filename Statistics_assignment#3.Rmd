@@ -1,0 +1,187 @@
+---
+title: "Statistics_assignment#3"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r air_quality}
+## Read airquality dataset in local r object
+airquality.dataframe <- airquality
+
+#structure of the airquality data
+str(airquality.dataframe)
+
+#check the number of rows and columns in the dataset
+dim(airquality.dataframe)
+
+#summary to check if the fields are read properly in R
+summary(airquality.dataframe)
+
+#First eyeball the first 10 rows of the data set
+head(airquality.dataframe,10)
+
+#Eyeball the last 10 rows of the data set 
+tail(airquality.dataframe,10)
+
+# List the attributes of airquality
+names(airquality)
+
+#---------#DATA CLEANSING-----------
+
+# Remmvoe NA from dataset
+any(is.na(airquality.dataframe[])) # To check is there any NA value in dataset
+sum(is.na(airquality.dataframe[])) # To compute how many NA are in dataset
+colSums(is.na(airquality.dataframe)) # To list columns that contains NA
+
+# Remove all NA from data frame except Solar.R as we are not using this variable as of now, 
+# we are using Ozone variable for regression let us remove NA from only Ozone
+airquality.df.noNA <- na.omit(airquality.dataframe[-2]) 
+dim(airquality.df.noNA) # Hers is udpated dataframe with NA removed from Ozone
+
+# --------------------- Point#1: --------------------------
+# Run a simple linear regression model using R's in built dataset 'airquality'. 
+##  Considering Temp as dependent (Y axis) variable and Ozone as independent variable (X axis). 
+##  Write down intercept and slope of Ozone, also explain if it is statistically significant or not?
+
+# R code to address above point
+# Let check what type of class are these variables
+class(airquality.df.noNA$Temp) 
+class(airquality.df.noNA$Ozone)
+# Now let us plot scatter plot on both Temp and Ozone variabels
+plot(airquality.df.noNA$Temp, airquality.df.noNA$Ozone, main = "Scatterplot", xlab = "Ozone", ylab = "Temp")
+# Let us calculate correlation between Tempratary and Ozone variable
+cor(airquality.df.noNA$Temp, airquality.df.noNA$Ozone)
+
+# Now let us build simple linear regression on these variables
+slr.model <- lm(airquality.df.noNA$Temp ~ airquality.df.noNA$Ozone)
+summary(slr.model)
+
+# Now let check the attributes of our model
+attributes(slr.model)
+# Let write intercept and slope of Ozone
+slr.model$coefficients
+
+# Let plot regression line on the linear plot
+plot(airquality.df.noNA$Temp, airquality.df.noNA$Ozone, main = "Scatterplot", xlab = "Ozone", ylab = "Temp")
+abline(slr.model, col=2, lwd=2) # This line is working fine when we run this cmd on console
+
+#Let check the confidence level
+confint(slr.model)
+# Summary of our linear regression model
+summary(slr.model)
+
+# Conclusion:
+# If we observe the summary of simple lenear model ploted using Temp and Ozone variable,from p-value we can make out 
+# that Ozone is contributing significately as it has 3 ***, means 'Ozone' is high significant value, i'e p = 0.001, 
+# confident level = (i-p) = (1 - 0.001) = 0.999 => 99.9 % confidence, which is > 95%
+
+# ------------------------------- Point#2: -------------------------
+# Let us analyse R square and adjusted R square values for this model
+# Here, R-squared and Adj R-squared valures are 0.4877 and 0.4832, means Ozone is contributing 48% of overall percentage
+
+```
+
+```{r air_quality_mlr}
+# ---------------------- Point#3: -----------------------------
+# Multiple linear regression model, Temp as dependent (Y axis) and all others variables as independent (X axis).
+# Explain which of the independent variables are statistically significant?
+
+# Now let us build multiple linear regression model considering all the independent variables
+# Remmvoe NA from dataset (if any)
+new_input_df <- airquality.dataframe
+any(is.na(new_input_df[])) # To check is there any NA value in dataset
+sum(is.na(new_input_df[])) # To compute how many NA are in dataset
+colSums(is.na(new_input_df)) # To list columns that contains NA
+new_input_df <- na.omit(new_input_df[]) 
+dim(new_input_df) # Hers is udpated dataframe with all NA removed
+
+
+# Let generate multiple regression model considering all variables
+pairs(new_input_df[])
+mlr.model <- lm(new_input_df$Temp ~ new_input_df$Ozone+new_input_df$Solar.R+new_input_df$Wind+new_input_df$Month+new_input_df$Day)
+mlr.model
+summary(mlr.model)
+
+# Conclusion:
+# From summary we can make out that only Ozone and month are significately contributing, other variables like solar.R, Wind and Day are not statistically significant, henace taking out these 3 parameter from calcualtion.
+
+# ---------------- Point#4 ----------------------
+# Here is new multiple linear regression model with only Ozone and month variable
+mlr.model.updated <- lm(new_input_df$Temp ~ new_input_df$Ozone+new_input_df$Month)
+mlr.model.updated
+summary(mlr.model.updated)
+
+# Final multiple regression model is Temp = 55.413+0.187+2.008
+
+# --------------- Point #5 ---------------------
+# Here, R-squared and Adj R-squared valures are 0.4877 and 0.4832, means Ozone is contributing 48% of overall percentage
+
+# From summary of udpated multiple regression models R squared and Adj R squared values are 0.6013 and 0.5824
+# i'e 60% and 58%. If we compare these R sqared values with simple linear regression model we can see that my adding 
+# one more variable we got around 10% jump in contribution. 
+
+```
+```{r air_quality_mlr1}
+# ----------------------- Point#6 ------------------
+# Simple linear regression with imputation, impute NA value with Ozone median by creating new column
+# Now let us build simple linear regression model considering Temp as dependent (Y axis) and Ozone-1 as independent (X axis variable)
+# Imput NA with Ozone median from Ozone column
+new_input_df1 <- airquality.dataframe
+any(is.na(new_input_df1[])) # To check is there any NA value in dataset
+sum(is.na(new_input_df1[])) # To compute how many NA are in dataset
+colSums(is.na(new_input_df1)) # To list columns that contains NA
+
+# Impute NA with median of Ozone column and add as new column Ozone_1
+new_input_df1$Ozone_1 <- new_input_df1$Ozone
+new_input_df1$Ozone_1[is.na(new_input_df1$Ozone_1)] <- median(new_input_df1$Ozone_1[!is.na(new_input_df1$Ozone_1)]) 
+dim(new_input_df) # Hers is udpated dataframe with NA of Ozone variable replaced with median
+head(new_input_df1, 10) # Let us view updated data frame with new additional column
+
+# Let check what type of class are these new variables
+class(new_input_df1$Temp) 
+class(new_input_df1$Ozone_1)
+# Now let us plot scatter plot on both Temp and newly added Ozone_1 variabels
+plot(new_input_df1$Temp, new_input_df1$Ozone_1, main = "Scatterplot", xlab = "Ozone_1", ylab = "Temp")
+# Let us calculate correlation between Tempratary and Ozone_1 variable
+cor(new_input_df1$Temp, new_input_df1$Ozone_1)
+
+# Now let us build simple linear regression on these variables
+new.slr.model <- lm(new_input_df1$Temp ~ new_input_df1$Ozone_1)
+summary(new.slr.model)
+
+# Now let check the attributes of our model
+attributes(new.slr.model)
+# Let write intercept and slope of Ozone_1
+new.slr.model$coefficients
+
+# Let plot regression line on the linear plot
+plot(new_input_df1$Temp, new_input_df1$Ozone_1, main = "Scatterplot", xlab = "Ozone_1", ylab = "Temp")
+abline(new.slr.model, col=3, lwd=2) # This line is working fine when we run this cmd on console
+
+#Let check the confidence level
+confint(new.slr.model)
+# Summary of our linear regression model
+summary(new.slr.model)
+
+# Conclusion:
+# If we observe the summary of simple lenear model ploted using Temp and Ozone_1 variable,from Ozone_1 p-value we can make out 
+# that Ozone_1 is contributing significately as it has 3 ***, means 'Ozone_1' is high significant value, i'e p = 0.001, 
+# confident level = (i-p) = (1 - 0.001) = 0.999 => 99.9 % confidence, which is > 95%
+
+# ------------- Point#7 -------------------------
+# Let us analyse R square and adjusted R square values for this new model
+# Here, R-squared and Adj R-squared valures are 0.361 as compared to first regression model value of (0.4877) and 0.3568 as compared to first regression model value of (0.4832), means contribution of Ozone_1 reduced as we replaced NA with median value. This will indicate that we have to ignore Ozone NA vlaue than retain for calculation with replacement.
+
+
+```
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
