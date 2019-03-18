@@ -1,0 +1,104 @@
+---
+title: "Statistics_Assignment#1_Solution"
+output: html_document
+---
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r iris}
+## Read iris dataset into local veriable
+mylocal_df <- iris
+## Get initial (head) dataset from iris
+head(mylocal_df)
+## Check the range of iris dataset
+range(mylocal_df$Sepal.Length)
+## Check the dimention of iris dataset
+dim(mylocal_df)
+
+## Calculate the bins required to stote the iris dataset
+bins = seq(4.3, 7.9, by=2)
+## Get the interval of iris dataset
+interval = cut(mylocal_df$Sepal.Length, 2)
+interval
+transform((table(interval)))
+intervalscumfreq = cumsum(table(interval))
+intervalscumfreq
+## 1. Measurement of cetral tendancy and dispersion
+## Get mean, meadian, mode, range, variance, std. deviation, interquartile, coefficient of variance of any one or two variables
+sl_mean   <- mean(mylocal_df$Sepal.Length)
+sl_median <- median(mylocal_df$Sepal.Length)
+
+# Create a function to calculate mode.
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+sl_mode   <- getmode(mylocal_df$Sepal.Length)
+sl_range  <- range(mylocal_df$Sepal.Length)
+sl_var    <- var(mylocal_df$Sepal.Length)
+sl_sd     <- sd(mylocal_df$Sepal.Length)
+covofvar  <- sl_sd/ sl_mean *100 ## Coefficient of var in %tage
+
+## 2. Data Vissualisation using boxplot
+sl_data <- table(as.vector(mylocal_df$Sepal.Length))
+names(sl_data)[sl_data == max(sl_data)]
+boxplot(mylocal_df$Sepal.Length)
+boxplot.stats(mylocal_df$Sepal.Length)
+
+## 3. Finding outliers from dataset
+## Outlier for Sepal length
+outliers_sl <- boxplot.stats(mylocal_df$Sepal.Length)$out ## Number of outliers
+outliers_sl
+## Outlier for Sepal width
+outliers_sw <- boxplot.stats(mylocal_df$Sepal.Width)$out ## Number of outliers
+outliers_sw
+## Outlier for Patel length
+outliers_pl <- boxplot.stats(mylocal_df$Petal.Length)$out ## Number of outliers
+outliers_pl
+## Outlier for Patel width
+outliers_pw <- boxplot.stats(mylocal_df$Petal.Width)$out ## Number of outliers
+outliers_pw
+
+
+
+## 4. Different types of plots on iris dataset
+## Simple scatter plot, Sepal length vs. Sepal width
+plot(mylocal_df$Sepal.Length, mylocal_df$Sepal.Width, main="Sepal Length Vs Width")
+
+## Simple scatter plot, Sepal length vs. Petal length
+plot(mylocal_df$Sepal.Length, mylocal_df$Petal.Length, main="Sepal Length Vs Petal length")
+
+## Simple scatter plot, Sepal length vs. Petal width
+plot(mylocal_df$Sepal.Length, mylocal_df$Petal.Width, main="Sepal Length Vs Petal width")
+
+## Simple scatter plot with colors
+plot(mylocal_df$Sepal.Length, mylocal_df$Sepal.Width, pch=21, bg=c("red","green","blue")[unclass(mylocal_df$Species)], main="Scatter plot with colors")
+
+## Simple scatter plot with colors
+plot(mylocal_df$Sepal.Length, mylocal_df$Petal.Width, pch=21, bg=c("red","yellow","green")[unclass(mylocal_df$Species)], main="Scatter plot with colors")
+
+## 5. Find Skewness on iris dataset
+library(moments)
+sl_sk <- skewness(mylocal_df$Sepal.Length)
+skewness(mylocal_df$Sepal.Width)
+skewness(mylocal_df$Petal.Length)
+skewness(mylocal_df$Petal.Width)
+
+## 6. Find Kurtosis on iris dataset
+kurtosis(mylocal_df$Sepal.Length)
+kurtosis(mylocal_df$Sepal.Width)
+kurtosis(mylocal_df$Petal.Length)
+kurtosis(mylocal_df$Petal.Width)
+
+## 7. Correlation of coefficient of different combinations
+## Compute correlations
+local_sub_df<-subset(mylocal_df,select=-Species)
+correl <-cor(local_sub_df)
+correl
+
+
+```
