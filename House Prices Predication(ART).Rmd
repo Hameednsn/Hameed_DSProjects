@@ -1,0 +1,302 @@
+---
+title: 'House Prices: Advanced Regression Techniques'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r lib}
+## Load Required libraries
+library(dplyr)
+library(caret)
+library(party)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r initial setup}
+## Set the working directory
+setwd("D:/Adv ML/Assignment#3")
+
+## Read the required input data file (both train and test data)
+train.data <-read.csv('train.csv')
+test.data  <-read.csv('test.csv')
+
+## Let me clean the data properly by combining both train and test together as it's easier to clean. 
+## As this is housing price prediction for each house based on number of parameters, hence the target variable (SalePrice) missing
+## So let me add this target variable in test data set and assign with NA (missing).
+
+# Apppend saleprice variable in test data
+test.data$SalePrice <- NA
+combined.data <-rbind(train.data, test.data) ## Combine both train and test data set
+table(train.data$YearBuilt) # View the house build year data in table format
+```
+``` {r Initial Analysis}
+## General summary of combined data set
+
+dim(train.data)        # Dimention of train data
+dim(test.data)         # Dimention of test data
+dim(combined.data)     # Dimention of combined data
+summary(combined.data) # Summary of combined data
+
+## Show frequency counts for all variables where < 20 categories/items in the variable
+lapply(combined.data, function(var) {if(dim(table(var)) < 20) table(var)})
+
+# In this data set there are many trade offs I'm not sure about as of now, hence discarding few variables 
+# that clearly have no value. As some vlaues are not clear, so let me try random forest algo first with full growth 
+# to assess variable importances, based on significance of each variable we can build the linear (or other?) model
+```
+``` {r randomtree}
+## To check feature importances, let me check the correlation between SalesPrice Vs MSSubClass with mean value
+aggregate(data=train.data, SalePrice~MSSubClass,mean)
+#from the data dictionary it does not look like a true representation
+class (combined.data$MSSubClass)
+
+# MSSubClass is a factor, let me convert MSSubClass to a categorical variable
+combined.data$MSSubClass=as.factor(paste('c',as.character(combined.data$MSSubClass),sep=''))
+
+#View the number of levels for each categorical variable
+sapply(combined.data[,sapply(combined.data,is.factor)],nlevels)
+# From the result it shows that there are no factors with > 32 levels
+
+#Replace NA's in combined data set
+NA_counts <-sapply(combined.data, function(x) sum(length(which(is.na(x)))))
+types     <-sapply(combined.data, class)
+cbind(types, NA_counts)
+
+## Loop through complete list of categorical variables, impute NA's with mode, here mode is used as variables are categorical,
+## also outlier does not have any impact on mode 
+
+## For calculating a variable's mode, we will define the mode function
+mode2 <-function(x){
+  ux<-unique(x) 
+  ux[which.max(tabulate(match(x,ux)))]
+}
+
+## Variables to complete with mode
+nafacs <- sapply(combined.data[,sapply(combined.data,is.factor)], function(x) sum(length(which(is.na(x)))))
+data.frame(nafacs)               # view results of factored data frame
+mvars   <- nafacs[0==200]        # NA's with less than 200
+dvars   <- nafacs[200 <= nafacs] # vars with >=200 NA's
+dvarnms <- names(dvars)          # Print names of the attributes
+combined.data[,dvarnms] <- NULL  # Drop variables that has high number of NA's
+
+
+## Now, let us loop through numerics variables to replace NA's with median
+NA_numbers <- sapply(combined.data[,sapply(combined.data,is.numeric)], function(x) sum(length(which(is.na(x)))))
+data.frame(NA_numbers)  # Convert to data frame
+m_vars <- NA_numbers[00] # NAs 
+m_vars <- mvars[-12] #exclude saleprice here..
+
+## Loop to replace all NA's with median
+for(varnm in names(m_vars)){
+  print(varnm)
+  combined.data[,varnm][is.na(combined.data[,varnm])]<-median(combined.data[,varnm], na.rm=T)
+}
+
+```
+```{r execution}
+## Run the Random Forest to identify best variables
+
+# Preparation of data
+t1  <- subset(train.data, select='Id')
+tr1 <- merge(combined.data,t1, by='Id')
+tr1$Id <- NULL
+
+#train forest model
+model_rf <- cforest(SalePrice~., data=tr1, control=cforest_unbiased(ntree=200))
+
+# view feature importances
+vi1 <- data.frame(varimp(model_rf)) #get importances
+#vi1 <- add_rownames(vi1,'var')      #convert rownames to a column
+vi1 <- tibble::rownames_to_column(vi1,'var')      #convert rownames to a column
+
+names(vi1)[names(vi1)=='varimp.model_rf.'] <- 'varimp'   #rename varimp column
+vi1 <- data.frame(vi1[with(vi1,order(-varimp, var)),])
+vi1 #view results
+
+```
+``` {r variables}
+##Encode Categoricals
+
+#get all factors from bs
+factors <- data.frame(names(combined.data)[sapply(combined.data,is.factor)])
+names(factors)[1] <- 'var'
+
+#find the ones that are in the forest's top 20 features
+merge(factors, vi1[0:20,], by='var')
+
+#neighorhood
+nbhds <- aggregate(data=combined.data, SalePrice~Neighborhood, mean)
+names(nbhds)[2]<-'Neighborhood_cg'
+combined.data <- merge(x=combined.data, y=nbhds, by='Neighborhood',all.x=T)
+
+# External quality
+combined.data$ExterQual_cg <- ifelse(combined.data$ExterQual=='Ex',5, 
+                                     ifelse(combined.data$ExterQual=='Gd',4,
+                                            ifelse(combined.data$ExterQual=='TA',3,
+                                                   ifelse(combined.data$ExterQual=='Fa',2,
+                                                          ifelse(combined.data$ExterQual=='Po',1,0)))))
+# Basement quality
+combined.data$BsmtQual_cg <- ifelse(combined.data$BsmtQual=='Ex',5,
+                                    ifelse(combined.data$BsmtQual=='Gd',4,
+                                           ifelse(combined.data$BsmtQual=='TA',3,
+                                                  ifelse(combined.data$BsmtQual=='Fa',2,
+                                                         ifelse(combined.data$BsmtQual=='Po',1,0)))))
+
+# Kitchen quality
+combined.data$KitchenQual_cg <- ifelse(combined.data$KitchenQual=='Ex',5,
+                                       ifelse(combined.data$KitchenQual=='Gd',4,
+                                              ifelse(combined.data$KitchenQual=='TA',3,
+                                                     ifelse(combined.data$KitchenQual=='Fa',2,
+                                                            ifelse(combined.data$KitchenQual=='Po',1,0)))))
+
+# Dwelling type
+dweltypes <- aggregate(data=combined.data, SalePrice~MSSubClass, mean)
+names(dweltypes)[2] <-'MSSubClass_cg'
+combined.data <- merge(x=combined.data, y=dweltypes, by='MSSubClass', all.x=T)
+
+# Garage interior finish
+garagefin <- aggregate(data=combined.data, SalePrice~GarageFinish, mean)
+names(garagefin)[2] <-'GarageFinish_cg'
+combined.data <- merge(x=combined.data, y=garagefin, by='GarageFinish', all.x=T)
+
+# Foundation
+foundations <- aggregate(data=combined.data, SalePrice~Foundation, mean)
+names(foundations)[2] <-'Foundation_cg'
+combined.data <- merge(combined.data, foundations, by='Foundation', all.x=T)
+
+
+# Age at time of sale
+combined.data$saleage_cg <- combined.data$YrSold-combined.data$YearBuilt
+
+# Neighbourhood*size
+combined.data$nbhdsize_cg <- combined.data$Neighborhood_cg.x*combined.data$GrLivArea
+```
+
+```{r train the model}
+## Train a Forest Model
+
+##Define training data
+
+#cut back the modified bs data to include only training observations
+train_data_id <- subset(train.data, select='Id')
+rf1_tr<-merge(combined.data, train_data_id, by='Id')
+use_vars = names(rf1_tr)
+rf1_tr <-subset(rf1_tr, select=use_vars) #note that use_vars is re-defined below!!!
+
+#split further into train/test for true out of sample test
+set.seed(1)
+train_index  <- sample(nrow(rf1_tr), size=floor(.6*nrow(rf1_tr)))
+rf1_tr_train <- rf1_tr[train_index,]
+rf1_tr_test  <- rf1_tr[-train_index,]
+
+
+##Train cforest model with rf1_tr_train
+model_rf1 <-cforest(SalePrice~., data=rf1_tr_train,
+             control=cforest_unbiased(ntree=100, mtry=8, minsplit=30,
+                                      minbucket=10))
+
+#view feature importances
+vi1 <- data.frame(varimp(model_rf1)) #get importances
+vi1 <- tibble::rownames_to_column(vi1,'var') #convert rownames to a column
+names(vi1)[names(vi1) == 'varimp.mdl_rf1.'] <-'varimp' #rename varimp column
+vi1 <-data.frame(vi1[with(vi1, order( var)),])
+vi1 #view results
+
+#get list of vars that add to model
+use_vars <-c(vi1[vi1$varimp > 0,1][0:30],'SalePrice')
+use_vars
+
+```
+```{r model score}
+##6. Score the Forest Model
+
+#define log rmse function
+rmse<-function(x,y){mean((log(x)-log(y))^2)^.5}
+
+#define assess function
+score_rf1<-function(df){
+  preds_rf1 <- predict(model_rf1, df, OOB=TRUE, type='response')
+  score1 <<- data.frame(cbind(df, preds_rf1))
+  names(score1)[names(score1)=='SalePrice.1']<<-'preds_rf1'
+  rmse(score1$SalePrice, score1$preds_rf1)
+}
+
+#gauge accuracy
+score_rf1(rf1_tr_train)#in-sample observations
+score_rf1(rf1_tr_test)#out of sample observations
+
+```
+```{r Linear model}
+##Train a Linear Model
+
+##Define training data
+
+#cut back the modified combined data to include only training observations
+train_data_id <- subset(train.data, select='Id')
+lm_tr <- merge(combined.data, train_data_id, by='Id')
+lm_tr$log_SalePrice=log(lm_tr$SalePrice)
+
+#subset to include numerics only
+nums_use <- names(lm_tr)[sapply(lm_tr,is.numeric)]
+nums_use <- c('LotArea', 'OverallQual', 'OverallCond', 'BsmtFinSF1', 'BsmtUnfSF', 'X1stFlrSF', 'X2ndFlrSF', 'Fireplaces', 'ScreenPorch', 'Neighborhood_cg.x', 'KitchenQual_cg', 'nbhdsize_cg', 'LotFrontage', 'BsmtFinSF2', 'BsmtQual_cg', 'log_SalePrice')
+#nums_use <- c('LotArea', 'OverallQual', 'OverallCond', 'BsmtFinSF1', 'BsmtUnfSF', 'X1stFlrSF', 'X2ndFlrSF', 'Fireplaces', 'ScreenPorch', 'Neighborhood_cg.x', 'KitchenQual_cg', 'nbhdsize_cg', 'BsmtFinSF2', 'log_SalePrice')
+# Find highly correlated features and generate predictive result file
+write.csv(cor(lm_tr[,nums_use]), file='correlation.csv')
+
+lm_tr$LotFrontage[is.na(lm_tr$LotFrontage)] <- mean(lm_tr$LotFrontage, na.rm = TRUE)
+lm_tr$BsmtQual_cg[is.na(lm_tr$BsmtQual_cg)] <- mean(lm_tr$BsmtQual_cg, na.rm = TRUE)
+findCorrelation(cor(lm_tr[,nums_use]))
+findLinearCombos(lm_tr[,nums_use])
+lm_tr <-subset(lm_tr, select=nums_use)
+
+#split further into train/test for true out of sample test
+set.seed(1)
+tr_index <- sample(nrow(lm_tr), size=floor(.9*nrow(lm_tr)))
+lm_tr_train <-lm_tr[tr_index,]
+lm_tr_test  <-lm_tr[-tr_index,]
+
+## Train a linear model with train data
+model_lm <-lm(log_SalePrice~.,data=lm_tr_train)
+summary(model_lm) #view initial results
+
+## Score the Linear Model
+# define log rmse function
+rmse <-function(x,y){mean((log(x)-log(y))^2)^.5}
+
+#define assess function
+score_lm <-function(df){ preds<-predict(model_lm,df,type='response')
+  preds <-exp(preds)
+  df$SalePrice=exp(df$log_SalePrice)
+  score2 <<-data.frame(cbind(df,preds))
+  rmse(score2$SalePrice, score2$preds)
+}
+
+#gauge accuracy
+score_lm(lm_tr_train)#in-sample observations
+score_lm(lm_tr_test)#out of sample observations
+
+```
+```{r submission}
+## Make Submission
+
+#get ktest-altered data
+t1     <- subset(test.data, select='Id')
+bs_ts  <- merge(t1, combined.data, by='Id')
+preds  <- exp(predict(model_lm, bs_ts, OOB=TRUE, type='response'))
+submit <-data.frame(Id=test.data$Id, SalePrice=preds)
+write.csv(submit,file='Kaggle_submit_file.csv', row.names=FALSE)
+
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
