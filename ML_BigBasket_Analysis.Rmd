@@ -1,0 +1,76 @@
+---
+title: "ML_BigBasket_Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r loadlibraries}
+library(arules)
+library(arulesViz)
+#library(dplyr)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r main}
+# Set the working directory
+setwd("D:/Machine Learning/Assignment #4")
+# Read Porto train and test data set
+#porto.traindata <- read.csv(file = "train.csv", stringsAsFactors = FALSE, header = TRUE)
+BB.data <- read.csv(file = "BigBasket_csv.csv",  stringsAsFactors = FALSE, header = TRUE)
+BigB.data <- data.frame(sapply(BB.data[],as.factor))
+
+#Data set summary
+str(BigB.data)
+summary(BigB.data) 
+
+rules <- apriori(BigB.data, parameter = list(supp = 0.001, conf = 0.8))
+itemFrequencyPlot(items(rules), topN=10, type="absolute")
+# Let us check the top 5 rules generated with only 2 digits and inspect top 5 rules
+options(digits = 2)
+inspect(rules[1:5])
+
+#The rules shows that someone who buys  
+```
+
+```{r method2}
+# Set the working directory
+setwd("D:/Machine Learning/Assignment #4")
+# Read Porto train and test data set
+#porto.traindata <- read.csv(file = "train.csv", stringsAsFactors = FALSE, header = TRUE)
+mydata <- read.csv(file = "BigBasket_csv.csv",  stringsAsFactors = FALSE, header = TRUE)
+
+head(mydata)
+# Split data with relevant columns
+dt <- split(mydata$Description, mydata$Order)
+
+# Now convert data to transaction level
+dt2 <- as(dt, "transactions")
+summary(dt2)
+
+# Let us get the top 10 items purchased by members
+itemFrequencyPlot(dt2, topN = 10, type = "relative")
+
+# Now Aggregate the rules
+rules <- apriori(dt2, parameter = list(support= 0.005, confidence = 0.8))
+
+# Convert rules into data frame
+rules3 <- as(rules, "data.frame")
+write(rules, "D:/Machine Learning/Assignment #4/rules.csv", sep = ",")
+
+
+#The rules shows that someone who buys  
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
