@@ -1,0 +1,126 @@
+---
+title: "McKinsey_Analytics_Hackathon"
+author: "Hameed Manikbhai"
+date: "21 July 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r Initial_setup}
+# Set the working directory
+setwd("D:/Data Analytics Hackathons/McKinsey Analytics Hackathon")
+
+```
+
+```{r load_libs}
+# Load the required libraries
+library(Hmisc)
+library(ROCR)
+
+```
+
+```{r Linear_Regression}
+###### Model to predict the propensity to pay renewal of premiums ###############
+Propen <- read.csv(file = "train_data.csv",  stringsAsFactors = FALSE, header = TRUE)
+test_data <- read.csv(file = "test_data.csv",  stringsAsFactors = FALSE, header = TRUE)
+str(Propen)
+summary(Propen) 
+
+# Test data analysis
+str(test_data)
+summary(test_data)
+
+# Impute the missing values with mean and median value for respective columns
+Propen$application_underwriting_score <- impute(Propen$application_underwriting_score, mean)
+Propen$Count_3.6_months_late          <- impute(Propen$Count_3.6_months_late         , median)
+Propen$Count_6.12_months_late         <- impute(Propen$Count_6.12_months_late        , median)
+Propen$Count_more_than_12_months_late <- impute(Propen$Count_more_than_12_months_late, median)
+summary(Propen) 
+
+# Impute the missing values with mean and median value for respective columns
+test_data$application_underwriting_score <- impute(test_data$application_underwriting_score, mean)
+test_data$Count_3.6_months_late          <- impute(test_data$Count_3.6_months_late         , median)
+test_data$Count_6.12_months_late         <- impute(test_data$Count_6.12_months_late        , median)
+test_data$Count_more_than_12_months_late <- impute(test_data$Count_more_than_12_months_late, median)
+summary(test_data) 
+
+
+# Apply the OLS Regression model
+Propen_output1 <- glm(renewal ~ perc_premium_paid_by_cash_credit + age_in_days + Income + Count_3.6_months_late + 
+                       Count_6.12_months_late + Count_more_than_12_months_late + application_underwriting_score +
+                       no_of_premiums_paid + sourcing_channel + residence_area_type + premium, family = binomial(), 
+                       data = Propen)
+summary(Propen_output1)
+
+# GENERATING PROPENSITY SCORE BY CONSIDERING ALL FEATURES AS DEFAULT
+prob_score1 <- data.frame(pr_score1 = predict(Propen_output1, Propen, type = "response"), renewal = Propen_output1$model$renewal)
+head(prob_score1)
+
+# Confucion Matrix to compare Prediction Vs Actual
+table_matrix <- table(Propen$renewal, prob_score1$pr_score1 > 0.5)
+table_matrix
+
+# Accuracy test
+accuracy_Test <- sum(diag(table_matrix)) / sum(table_matrix)
+accuracy_Test
+write.csv(prob_score1, "prob_score1_1.csv")
+
+# ROC CURVE
+ROCRpred <- prediction(prob_score1$pr_score1, Propen$renewal)
+ROCRpred <- prediction(prob_score1$pr_score1, Propen_output1$model$renewal)
+ROCRperf <- performance(ROCRpred, 'tpr', 'fpr')
+plot(ROCRperf, colorize = TRUE, text.adj = c(-0.2, 1.7))
+```
+
+```{r propensity}
+###### Another Model to predict the propensity to pay renewal of premiums ###############
+summary(Propen) 
+
+# Apply the OLS Regression model
+Propen_output2 <- glm(renewal ~ perc_premium_paid_by_cash_credit + age_in_days + Count_3.6_months_late + 
+                       Count_6.12_months_late + Count_more_than_12_months_late + application_underwriting_score +
+                       no_of_premiums_paid, family = binomial(), data = Propen)
+summary(Propen_output2)
+
+# GENERATING PROPENSITY SCORE BY CONSIDERING ALL FEATURES AS DEFAULT
+prob_score2 <- data.frame(pr_score2 = predict(Propen_output2, type = "response"), renewal = Propen_output2$model$renewal)
+head(prob_score2)
+
+write.csv(prob_score2, "prob_score2_1.csv")
+```
+```{r test.data}
+
+myModel <- predict(Propen_output2, test_data, type = "response")
+
+# confusion matrix
+write.csv(cbind(test_data$id, myModel), "prob_score3.csv")
+```
+
+```{r model2}
+# Apply the OLS Regression model
+model3 <- glm(renewal ~ perc_premium_paid_by_cash_credit + age_in_days + Count_3.6_months_late +
+                       Count_6.12_months_late + Count_more_than_12_months_late + application_underwriting_score +
+                       no_of_premiums_paid, family = binomial(), data = Propen)
+summary(model3)
+
+# GENERATING PROPENSITY SCORE BY CONSIDERING ALL FEATURES AS DEFAULT
+prob_score3 <- data.frame(pr_score3 = predict(model3, type = "response"), renewal = model3$salimodel$renewal)
+head(prob_score3)
+finalModel3 <- predict(model3, test_data, type = "response")
+
+# confusion matrix
+write.csv(cbind(test_data$id, finalModel3), "prob_score_of_testdata.csv")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
